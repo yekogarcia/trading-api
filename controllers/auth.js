@@ -52,10 +52,11 @@ const registerUsers = async (req, res = response) => {
 }
 
 const loginUsers = async (req, res = response) => {
-    const { email, password } = req.body;
+    const { profile, email, password } = req.body;
     try {
         const db = dbconnect();
-        const { rows } = await db.query("select id,user_login,email,password,state,name from users where email=$1", [email])
+        const sql = "select u.id,user_login,email,password,state,name,profile from users u inner join users_company c on c.user_id=u.id where u.email=$1 and c.profile=$2";
+        const { rows } = await db.query(sql, [email, profile])
         db.end();
 
         if (rows.length > 0) {

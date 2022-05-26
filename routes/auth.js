@@ -33,6 +33,7 @@ router.post('/register-pay',
 
 router.post('/login',
     [// middlewares
+        check('profile', 'El perfil es obligatorio').not().isEmpty(),
         check('email', 'El usuario es obligatorio').isEmail(),
         check('password', 'El password debe ser de 6 characters').isLength({ min: 6 }),
         validateFields
