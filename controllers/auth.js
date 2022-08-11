@@ -3,13 +3,14 @@ const { dbconnect } = require('../db/connection');
 const { generateCode, respJson, generateJTW } = require('../helpers/generate');
 const bcrypt = require('bcryptjs');
 const moment = require('moment');
+const { json } = require('express/lib/response');
 
 
 
 const registerUsers = async (req, res = response) => {
 
     const code = await generateCode();
-    const { referred_code, name, email, cell_phone, password } = req.body;
+    const { referred_code, name, email, cell_phone, password, id_plan } = req.body;
     let createDateTime = moment().format('YYYY-MM-DD HH:MM');
     // Encriptar password
     const salt = bcrypt.genSaltSync();
@@ -20,8 +21,8 @@ const registerUsers = async (req, res = response) => {
         const { rows } = await db.query('select * from users where email=$1', [email]);
         if (rows.length == 0) {
             try {
-                const values = [code, referred_code, name, email, email, cell_phone, pass, createDateTime, 'Inactivo', 1];
-                const text = 'INSERT INTO users(referral_code,code_referred,name,email,user_login,cell_phone,password,create_datetime,state,company) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *';
+                const values = [code, referred_code.toUpperCase(), name, email.toLowerCase(), email.toLowerCase(), cell_phone, pass, createDateTime, 'INACTIVO', 1, id_plan];
+                const text = 'INSERT INTO users(referral_code,code_referred,name,email,user_login,cell_phone,password,create_datetime,state,company,id_plans) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *';
 
                 const resp = await db.query(text, values);
 
@@ -34,6 +35,7 @@ const registerUsers = async (req, res = response) => {
                 await db.query('insert into users_company(user_id,profile,company) values($1,$2,$3)', [id, 4, 1])
                 await db.end();
 
+                // console.log(resp.rows[0]);
                 return respJson(res, 201, true, resp.rows[0]);
 
             } catch (error) {
@@ -56,16 +58,16 @@ const loginUsers = async (req, res = response) => {
     try {
         const db = dbconnect();
         const sql = "select u.id,user_login,email,password,state,name,profile from users u inner join users_company c on c.user_id=u.id where u.email=$1 and c.profile=$2";
-        const { rows } = await db.query(sql, [email, profile])
+        const { rows } = await db.query(sql, [email.toLowerCase(), profile])
         db.end();
 
         if (rows.length > 0) {
-            if (rows[0].state == 'Inactivo') {
+            if (rows[0].state == 'INACTIVO') {
                 return respJson(res, 400, false, "El usuario está inactivo, actualice su pago o comuníquese con el administrador!")
             }
             const validPass = bcrypt.compareSync(password, rows[0].password);
             if (!validPass) {
-                return respJson(res, 400, false, "El usuario o contraseña son incorrectas, ¡verifique por favor!");
+                return respJson(res, 400, false, "El usuario u contraseña son incorrectas, ¡verifique por favor!");
             }
             //  Generar JWT
             let id = rows[0].id;
@@ -92,10 +94,11 @@ const loginUsers = async (req, res = response) => {
 
 const registerPay = async (req, res = response) => {
 
-    const dateTime = moment().format('YYYY-MM-DD HH:MM:SS');
-    const { email, code_pay } = req.body;
+    const dateTime = moment().format('YYYY-MM-DD HH:MM');
+    const { email, code_pay, method_pay } = req.body;
     try {
-        const { rows } = await db.query('select u.id, p.code_pay from users u left join users_payments p on u.id=p.user_id where email=$1', [email]);
+        const db = dbconnect();
+        const { rows } = await db.query('select u.id, p.code_pay from users u left join users_payments p on u.id=p.id_user where u.email=$1', [email.toLowerCase()]);
         let type = "Primera Vez";
         if (rows[0].code_pay !== null) {
             type = "Renovación";
@@ -105,8 +108,8 @@ const registerPay = async (req, res = response) => {
         if (rows.length == 0) {
             return respJson(res, 400, false, "El email no se encuentra registrado, por favor registrarse y volver a intentarlo");
         } else {
-            const text = "INSERT INTO users_payments (user_id,code_pay,creation_datetime, type) VALUES ($1, $2, $3, $4)";
-            db.query(text, [id, code_pay, dateTime, type], (err, resp) => {
+            const text = "INSERT INTO users_payments (id_user,code_pay,creation_datetime, type, email, method_pay,state) VALUES ($1, $2, $3, $4, $5, $6, $7)";
+            db.query(text, [id, code_pay, dateTime, type, email.toLowerCase(),method_pay, 'PENDIENTE'], (err, resp) => {
                 if (err) {
                     console.log(err.stack)
                     return respJson(res, 500, false, err.stack);
@@ -121,6 +124,38 @@ const registerPay = async (req, res = response) => {
     }
 
 }
+
+const getPlans = async (req, res = response) => {
+
+    try {
+        const db = dbconnect();
+        const { rows } = await db.query('select p.*,c.abbreviation from plans p inner join type_coins c on (p.moneda=c.id) where p.state=$1 order by id ', ["ACTIVO"]);
+        return res.status(200).json({
+            ok: true,
+            data: rows
+        });
+    } catch (err) {
+        console.log(err.stack)
+        return respJson(res, 500, false, err.stack)
+    }
+
+}
+
+const getMethodsPay = async (req, res = response) => {
+
+    try {
+        const db = dbconnect();
+        const { rows } = await db.query('select * from payments_methods');
+        return res.status(200).json({
+            ok: true,
+            data: rows
+        });
+    } catch (err) {
+        console.log(err.stack)
+        return respJson(res, 500, false, err.stack)
+    }
+}
+
 
 const validatePay = async (req, res = response) => {
     const { user, password } = req.body;
@@ -152,7 +187,9 @@ module.exports = {
     registerPay,
     validatePay,
     loginUsers,
-    renewToken
+    renewToken,
+    getPlans,
+    getMethodsPay
 }
 
 

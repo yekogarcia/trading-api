@@ -3,6 +3,7 @@ const { validationResult } = require('express-validator');
 
 
 const validateFields = (req, res = response, next) => {
+    // console.log(req);
     
     const errors = validationResult(req);
     console.log(errors);
