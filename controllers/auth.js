@@ -18,7 +18,7 @@ const registerUsers = async (req, res = response) => {
 
     try {
         const db = dbconnect();
-        const { rows } = await db.query('select * from users where email=$1', [email]);
+        const { rows } = await db.query('select * from users u inner join users_company c on (u.id=c.user_id) where u.email=$1 and c.profile=$2', [email, 4]);
         if (rows.length == 0) {
             try {
                 const values = [code, referred_code.toUpperCase(), name, email.toLowerCase(), email.toLowerCase(), cell_phone, pass, createDateTime, 'INACTIVO', 1, id_plan];
@@ -52,6 +52,7 @@ const registerUsers = async (req, res = response) => {
         return respJson(res, 500, false, err.stack);
     }
 }
+
 
 const loginUsers = async (req, res = response) => {
     const { profile, email, password } = req.body;

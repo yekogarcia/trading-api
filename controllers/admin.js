@@ -2,6 +2,7 @@ const { response } = require('express');
 const { dbconnect } = require('../db/connection');
 const { respJson } = require('../helpers/generate');
 const moment = require('moment');
+const bcrypt = require('bcryptjs');
 
 
 
@@ -127,9 +128,9 @@ const deleteRowTables = async (req, res = response) => {
 const updateStateRow = async (req, res = response) => {
     const { id, table, state } = req.body;
     try {
-        console.log(table);
+        const createDateTime = moment().format('YYYY-MM-DD HH:MM');
         const db = dbconnect();
-        await db.query(`UPDATE ${table} SET state='${state}'WHERE id=$1`, [id]);
+        await db.query(`UPDATE ${table} SET state='${state}', activate_datetime='${createDateTime}' WHERE id=$1`, [id]);
         await db.end();
         return res.status(200).json({
             ok: true,
@@ -210,7 +211,7 @@ const addRowDynamic = async (req, res = response) => {
 const getEstudents = async (req, res = response) => {
     try {
         const db = dbconnect();
-        const { rows } = await db.query(`SELECT u.*, u.id as key,p.title as plan FROM users u left join plans p ON p.id = u.id_plans `);
+        const { rows } = await db.query(`SELECT u.*, u.id as key,p.title as plan FROM users u left join plans p ON p.id = u.id_plans left join users_company c  on c.user_id=u.id where c.profile=4`);
         await db.end();
         return res.status(200).json({
             ok: true,
@@ -220,12 +221,36 @@ const getEstudents = async (req, res = response) => {
         console.log(error.stack);
     }
 }
+// const getAcademiesUser = async (dat) => {
+//     const db = dbconnect();
+//     try {
+//         for (let i = 0; i < dat.length; i++) {
+//             const academy = dat[i].academy;
+//             const ids = academy.join(',');
+//             console.log(ids);
+//             if (ids) {
+//                 const { rows } = await db.query(`SELECT id as key,name FROM academies where id in ( ${ids} ) `);
+//                 // console.log(rows);
+//                 rows.forEach((r) => {
+//                     console.log(r);
+//                     dat[i].academy.push(r);
+//                 })
+//                 dat[i].academy = rows;
+//             }
+//         }
+//         await db.end();
+//         return dat;
+
+//     } catch (error) {
+//         console.log(error);
+//     }
+// }
 
 const getUsers = async (req, res = response) => {
     try {
         const db = dbconnect();
-        const { rows } = await db.query(`SELECT u.*,p.name as profile, u.id as key FROM users u left join users_company c on u.id=c.user_id
-        left join profiles p ON p.id = c.profile`);
+        const { rows } = await db.query(`SELECT u.*,p.name as profile_text,c.profile, u.id as key FROM users u left join users_company c on u.id=c.user_id
+        left join profiles p ON p.id = c.profile where c.profile <>4`);
         await db.end();
         return res.status(200).json({
             ok: true,
@@ -249,6 +274,107 @@ const getPaymentsUsers = async (req, res = response) => {
         return respJson(res, 500, false, err.stack)
     }
 }
+const getProfiles = async (req, res = response) => {
+    try {
+        const db = dbconnect();
+        const { rows } = await db.query('select *, id as key from profiles where id<>4');
+        return res.status(200).json({
+            ok: true,
+            data: rows
+        });
+    } catch (err) {
+        console.log(err.stack)
+        return respJson(res, 500, false, err.stack)
+    }
+}
+
+const getAcadamiesProfile = async (req, res = response) => {
+    try {
+        const db = dbconnect();
+        const { rows } = await db.query('select *, id as key from academies ');
+        return res.status(200).json({
+            ok: true,
+            data: rows
+        });
+    } catch (err) {
+        console.log(err.stack)
+        return respJson(res, 500, false, err.stack)
+    }
+}
+
+const registerUsersAdmin = async (req, res = response) => {
+
+    const { id, name, email, cell_phone, password, profile, academy,photo_profile } = req.body;
+    console.log(req.body);
+    let createDateTime = moment().format('YYYY-MM-DD HH:MM');
+    // Encriptar password
+    const salt = bcrypt.genSaltSync();
+    const pass = bcrypt.hashSync(password, salt);
+
+    try {
+        const db = dbconnect();
+        if (id == '') {
+            if (rows.length == 0) {
+                try {
+                    const { rows } = await db.query('select u.* from users u inner join users_company c on (u.id=c.user_id) where u.email=$1 and c.profile=$2', [email, profile]);
+
+                    const values = [name, email.toLowerCase(), email.toLowerCase(), cell_phone, pass, createDateTime, 'INACTIVO', 1, academy,photo_profile];
+
+                    const text = 'INSERT INTO users(name,email,user_login,cell_phone,password,create_datetime,state,company,academy,photo_profile) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9,$10) RETURNING *';
+
+                    const resp = await db.query(text, values);
+
+                    //  Generar Id
+                    let id = resp.rows[0].id;
+                    // await db.query('update users set token=$1 where id=$2', [token, id])
+                    await db.query('insert into users_company(user_id,profile,company) values($1,$2,$3)', [id, profile, 1])
+                    await db.end();
+
+                    // console.log(resp.rows[0]);
+                    return respJson(res, 201, true, resp.rows[0]);
+
+                } catch (error) {
+                    console.log(error.stack)
+                    return respJson(res, 500, false, error.stack);
+                }
+
+            } else {
+                return respJson(res, 400, false, "Ya existe registrado un usuario con el mismo email!");
+
+            }
+        } else {
+            try {
+                const values = [name, email.toLowerCase(), email.toLowerCase(), cell_phone, academy,photo_profile, id];
+                let text = 'UPDATE users SET name=$1,email=$2,user_login=$3,cell_phone=$4,academy=$5,photo_profile=$6';
+
+                if (password != "password") {
+                    values.push(pass);
+                    text += ',password=$8';
+                }
+                text += ' WHERE id=$7 RETURNING *'
+
+                const { rows } = await db.query(text, values);
+
+                await db.query('UPDATE users_company SET profile=$1 WHERE id=$2', [profile, id])
+                await db.end();
+                console.log(values);
+
+                return respJson(res, 201, true, rows[0]);
+
+
+            } catch (error) {
+                console.log(error.stack);
+                return respJson(res, 500, false, error.stack);
+            }
+
+        }
+
+
+    } catch (err) {
+        console.log(err.stack)
+        return respJson(res, 500, false, err.stack);
+    }
+}
 
 
 module.exports = {
@@ -262,5 +388,8 @@ module.exports = {
     addRowDynamic,
     getEstudents,
     getUsers,
-    getPaymentsUsers
+    getPaymentsUsers,
+    registerUsersAdmin,
+    getProfiles,
+    getAcadamiesProfile
 }
