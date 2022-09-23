@@ -13,7 +13,7 @@ const { getDynamicTables, setDynamicTables, getParamsTable, getAllTables, delete
 
 const { validarJWT } = require('../middlewares/validar-jwt');
 const { validateFields } = require('../middlewares/validate-fields');
-const { uploadFiles, uploads, getFiles } = require('../controllers/upload');
+const { uploadFiles, uploads, getFiles, removeFiles, uploadsVideo } = require('../controllers/upload');
 
 
 router.post('/auth/register',
@@ -27,60 +27,72 @@ router.post('/auth/register',
         validateFields
     ],
     registerUsers);
-    
-    router.post('/auth/register-pay',
+
+router.post('/auth/register-pay',
     [// middlewares
-    check('email', 'El email es obligatorio').isEmail(),
-    check('code_pay', 'El codigo de pago es obligatorio').not().isEmpty(),
-    check('method_pay', 'El metodo de pago es obligatorio').not().isEmpty(),
-    validateFields
-],
-registerPay);
+        check('email', 'El email es obligatorio').isEmail(),
+        check('code_pay', 'El codigo de pago es obligatorio').not().isEmpty(),
+        check('method_pay', 'El metodo de pago es obligatorio').not().isEmpty(),
+        validateFields
+    ],
+    registerPay);
 
 router.post('/auth/login',
-[// middlewares
+    [// middlewares
         check('profile', 'El perfil es obligatorio').not().isEmpty(),
         check('email', 'El usuario es obligatorio').isEmail(),
         check('password', 'El password debe ser de 6 characters').isLength({ min: 6 }),
         validateFields
     ],
     loginUsers);
-    
+
 router.post('/ad/add-tbdynamic',
-[// middlewares
-check('table_name', 'El nombre de la tabla es obligatorio').not().isEmpty(),
-check('name', 'El nombre es obligatorio').not().isEmpty(),
-validateFields
-],
-setDynamicTables);
+    [// middlewares
+        check('table_name', 'El nombre de la tabla es obligatorio').not().isEmpty(),
+        check('name', 'El nombre es obligatorio').not().isEmpty(),
+        validateFields
+    ],
+    setDynamicTables);
 
 router.post('/ad/add-rowdynamic',
-[// middlewares
-check('table', 'El nombre de la tabla es obligatorio').not().isEmpty(),
-validateFields
-],
-addRowDynamic);
+    [// middlewares
+        check('table', 'El nombre de la tabla es obligatorio').not().isEmpty(),
+        validateFields
+    ],
+    addRowDynamic);
 router.post('/ad/upload',
-uploads,
-uploadFiles
+    uploads,
+    uploadFiles
+);
+router.post('/ad/upload-video',
+    uploadsVideo,
+    uploadFiles
 );
 
 router.delete('/ad/delete-row',
-[// middlewares
-check('table', 'El nombre de la tabla es obligatorio').not().isEmpty(),
+    [// middlewares
+        check('table', 'El nombre de la tabla es obligatorio').not().isEmpty(),
         check('id', 'El id es obligatorio').not().isEmpty(),
         validateFields
     ],
     deleteRowTables);
-    
-    router.put('/ad/update-state',
+
+router.delete('/ad/remove-file',
     [// middlewares
-    check('state', 'El estado  es obligatorio').not().isEmpty(),
-    check('table', 'El nombre de la tabla es obligatorio').not().isEmpty(),
-    check('id', 'El id es obligatorio').not().isEmpty(),
-    validateFields
-],
-updateStateRow);
+        check('folder', 'El parametro folder es obligatorio').not().isEmpty(),
+        check('url', 'El parametro url es obligatorio').not().isEmpty(),
+        validateFields
+    ],
+    removeFiles);
+
+router.put('/ad/update-state',
+    [// middlewares
+        check('state', 'El estado  es obligatorio').not().isEmpty(),
+        check('table', 'El nombre de la tabla es obligatorio').not().isEmpty(),
+        check('id', 'El id es obligatorio').not().isEmpty(),
+        validateFields
+    ],
+    updateStateRow);
 
 router.post('/ad/add-user',
     [// middlewares
